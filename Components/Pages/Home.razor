@@ -1,10 +1,326 @@
 @page "/"
+@inject CsvParserService CsvParser
+@inject BatterySimulationService BatterySimulator
+@inject AmortizationCalculatorService AmortizationCalculator
 
-<PageTitle>Hello World - Battery Calculator</PageTitle>
+<PageTitle>PV Battery Amortization Calculator</PageTitle>
 
-<div class="hello-world-container">
-    <h1>Hello World!</h1>
-    <p>Welcome to the Battery Calculator Blazor WASM application.</p>
-    <p>This is a simple Hello World example running on GitHub Pages.</p>
+<ColumnMappingModal 
+    Show="@showMappingModal" 
+    Headers="@csvHeaders" 
+    Mapping="@columnMapping"
+    OnConfirm="@HandleMappingConfirmed"
+    OnClose="@HandleMappingClosed" />
+
+<div class="calculator-container">
+    <h1>PV Battery Amortization Calculator</h1>
+    <p class="subtitle">Berechnen Sie die Amortisationsdauer Ihres PV-Batteriespeichers</p>
+
+    <EditForm Model="@config" OnValidSubmit="@HandleCalculate">
+        <DataAnnotationsValidator />
+
+        <div class="section">
+            <h2>1. CSV-Datei hochladen</h2>
+            <div class="upload-section">
+                <InputFile OnChange="@HandleFileSelected" accept=".csv" id="file-upload" class="file-input" />
+                <label for="file-upload" class="file-label">
+                    <span class="file-button">📁 CSV-Datei auswählen</span>
+                </label>
+                @if (!string.IsNullOrEmpty(uploadedFileName))
+                {
+                    <div class="file-info">
+                        <span class="file-name">✓ @uploadedFileName</span>
+                        @if (energyData != null && energyData.Count > 0)
+                        {
+                            <span class="file-count">(@energyData.Count Tage geladen)</span>
+                        }
+                    </div>
+                }
+                @if (!string.IsNullOrEmpty(uploadError))
+                {
+                    <div class="error-message">@uploadError</div>
+                }
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>2. Batterie-Parameter</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="battery-capacity">Speicherkapazität (kWh)</label>
+                    <InputNumber @bind-Value="config.BatteryCapacity" id="battery-capacity" class="form-control" step="0.01" />
+                    <ValidationMessage For="@(() => config.BatteryCapacity)" />
+                </div>
+
+                <div class="form-group">
+                    <label for="charge-loss">Ladeverlust (%)</label>
+                    <InputNumber @bind-Value="config.ChargeLossPercent" id="charge-loss" class="form-control" step="0.1" />
+                    <ValidationMessage For="@(() => config.ChargeLossPercent)" />
+                </div>
+
+                <div class="form-group">
+                    <label for="discharge-loss">Entladeverlust (%)</label>
+                    <InputNumber @bind-Value="config.DischargeLossPercent" id="discharge-loss" class="form-control" step="0.1" />
+                    <ValidationMessage For="@(() => config.DischargeLossPercent)" />
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>3. Energiepreise</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="price-purchase">kWh-Preis Netzbezug (€)</label>
+                    <InputNumber @bind-Value="config.PricePerKwhPurchase" id="price-purchase" class="form-control" step="0.001" />
+                    <ValidationMessage For="@(() => config.PricePerKwhPurchase)" />
+                </div>
+
+                <div class="form-group">
+                    <label for="price-feed">kWh-Preis Einspeisung (€)</label>
+                    <InputNumber @bind-Value="config.PricePerKwhFeed" id="price-feed" class="form-control" step="0.001" />
+                    <ValidationMessage For="@(() => config.PricePerKwhFeed)" />
+                </div>
+
+                <div class="form-group">
+                    <label for="battery-price">Batteriepreis (€)</label>
+                    <InputNumber @bind-Value="config.BatteryPrice" id="battery-price" class="form-control" step="0.01" />
+                    <ValidationMessage For="@(() => config.BatteryPrice)" />
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <button type="submit" class="btn-primary" disabled="@(energyData == null || energyData.Count == 0)">
+                Berechnen
+            </button>
+        </div>
+    </EditForm>
+
+    @if (result != null)
+    {
+        <div class="section results-section">
+            <h2>Ergebnisse</h2>
+
+            <div class="results-grid">
+                <div class="result-card @(result.IsAmortizationPossible ? "success" : "warning")">
+                    <div class="result-label">Amortisationsdauer</div>
+                    <div class="result-value">
+                        @if (result.IsAmortizationPossible)
+                        {
+                            @if (result.AmortizationPeriodYears < 1)
+                            {
+                                <span>@result.AmortizationPeriodMonths.ToString("F1") Monate</span>
+                            }
+                            else
+                            {
+                                <span>@result.AmortizationPeriodYears.ToString("F1") Jahre</span>
+                            }
+                        }
+                        else
+                        {
+                            <span>Nicht amortisierbar</span>
+                        }
+                    </div>
+                </div>
+
+                <div class="result-card">
+                    <div class="result-label">Jährliche Einsparungen</div>
+                    <div class="result-value">@result.AnnualSavings.ToString("F2") €</div>
+                </div>
+
+                <div class="result-card">
+                    <div class="result-label">Gesamteinsparungen (Simulationszeitraum)</div>
+                    <div class="result-value">@result.TotalSavings.ToString("F2") €</div>
+                </div>
+
+                <div class="result-card">
+                    <div class="result-label">Simulationszeitraum</div>
+                    <div class="result-value">@result.SimulationDays Tage</div>
+                </div>
+            </div>
+
+            <div class="energy-metrics">
+                <h3>Energiemetriken</h3>
+                <div class="metrics-grid">
+                    <div class="metric-item">
+                        <span class="metric-label">Energie gespart (durch Entladung):</span>
+                        <span class="metric-value">@result.TotalEnergySaved.ToString("F2") kWh</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Energie für Ladung verwendet:</span>
+                        <span class="metric-value">@result.TotalEnergyUsedForCharging.ToString("F2") kWh</span>
+                    </div>
+                </div>
+            </div>
+
+            @if (result.DailyResults != null && result.DailyResults.Count > 0)
+            {
+                <div class="daily-results">
+                    <h3>Tägliche Ergebnisse</h3>
+                    <div class="table-container">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>Datum</th>
+                                    <th>Akku Start (kWh)</th>
+                                    <th>Entladen (kWh)</th>
+                                    <th>Geladen (kWh)</th>
+                                    <th>Akku Ende (kWh)</th>
+                                    <th>Netzbezug ohne Akku (kWh)</th>
+                                    <th>Netzbezug mit Akku (kWh)</th>
+                                    <th>Einspeisung ohne Akku (kWh)</th>
+                                    <th>Einspeisung mit Akku (kWh)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var day in result.DailyResults)
+                                {
+                                    <tr>
+                                        <td>@day.Date.ToString("dd.MM.yyyy")</td>
+                                        <td>@day.BatteryChargeStart.ToString("F2")</td>
+                                        <td>@day.EnergyDischarged.ToString("F2")</td>
+                                        <td>@day.EnergyCharged.ToString("F2")</td>
+                                        <td>@day.BatteryChargeEnd.ToString("F2")</td>
+                                        <td>@day.OriginalGridDraw.ToString("F2")</td>
+                                        <td>@day.GridDrawAfterBattery.ToString("F2")</td>
+                                        <td>@day.OriginalGridFeed.ToString("F2")</td>
+                                        <td>@day.GridFeedAfterBattery.ToString("F2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @if (isCalculating)
+    {
+        <div class="loading-overlay">
+            <div class="loading-spinner">Berechne...</div>
+        </div>
+    }
 </div>
 
+@code {
+    private ConfigurationModel config = new();
+    private List<EnergyDataRecord>? energyData;
+    private AmortizationResult? result;
+    private string uploadedFileName = string.Empty;
+    private string uploadError = string.Empty;
+    private bool isCalculating = false;
+    
+    private bool showMappingModal = false;
+    private List<string> csvHeaders = new();
+    private ColumnMapping columnMapping = new();
+    private IBrowserFile? selectedFile;
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        uploadError = string.Empty;
+        uploadedFileName = e.File.Name;
+        selectedFile = e.File;
+        energyData = null;
+
+        try
+        {
+            // Read headers from CSV file
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024); // 10 MB max
+            csvHeaders = await CsvParser.ReadHeadersAsync(stream);
+            
+            // Create automatic mapping suggestion
+            columnMapping = CsvParser.CreateAutoMapping(csvHeaders);
+            
+            // Show mapping modal
+            showMappingModal = true;
+        }
+        catch (Exception ex)
+        {
+            uploadError = $"Fehler beim Laden der CSV-Datei: {ex.Message}";
+            energyData = null;
+            showMappingModal = false;
+        }
+    }
+
+    private async Task HandleMappingConfirmed(ColumnMapping mapping)
+    {
+        if (selectedFile == null)
+        {
+            return;
+        }
+
+        try
+        {
+            // Parse CSV with the confirmed mapping
+            using var stream = selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            energyData = await CsvParser.ParseCsvAsync(stream, mapping);
+            uploadError = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            uploadError = $"Fehler beim Parsen der CSV-Datei: {ex.Message}";
+            energyData = null;
+        }
+    }
+
+    private void HandleMappingClosed()
+    {
+        showMappingModal = false;
+        if (energyData == null)
+        {
+            uploadedFileName = string.Empty;
+            selectedFile = null;
+        }
+    }
+
+    private async Task HandleCalculate()
+    {
+        if (energyData == null || energyData.Count == 0)
+        {
+            return;
+        }
+
+        isCalculating = true;
+        result = null;
+
+        try
+        {
+            await Task.Run(() =>
+            {
+                // Simulate battery behavior
+                var simulationResults = BatterySimulator.Simulate(
+                    energyData,
+                    config.BatteryCapacity,
+                    config.ChargeLossPercent,
+                    config.DischargeLossPercent);
+
+                // Calculate amortization
+                result = AmortizationCalculator.Calculate(
+                    simulationResults,
+                    energyData,
+                    config.PricePerKwhPurchase,
+                    config.PricePerKwhFeed,
+                    config.BatteryPrice);
+            });
+        }
+        catch (Exception ex)
+        {
+            uploadError = $"Fehler bei der Berechnung: {ex.Message}";
+        }
+        finally
+        {
+            isCalculating = false;
+        }
+    }
+
+    public class ConfigurationModel
+    {
+        public double BatteryCapacity { get; set; } = 5.12;
+        public double ChargeLossPercent { get; set; } = 5.0;
+        public double DischargeLossPercent { get; set; } = 5.0;
+        public double PricePerKwhPurchase { get; set; } = 0.30;
+        public double PricePerKwhFeed { get; set; } = 0.08;
+        public double BatteryPrice { get; set; } = 5000.0;
+    }
+}

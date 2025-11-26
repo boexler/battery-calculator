@@ -1,0 +1,141 @@
+@using battery_calculator.Models
+
+@if (Show)
+{
+    <div class="modal-overlay" @onclick="HandleOverlayClick">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h2>CSV-Spalten zuordnen</h2>
+                <button class="modal-close" @onclick="HandleClose">×</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">
+                    Bitte ordnen Sie die CSV-Spalten den entsprechenden Datenfeldern zu.
+                    Eine automatische Vorauswahl wurde bereits vorgenommen.
+                </p>
+
+                <div class="mapping-grid">
+                    <div class="mapping-item">
+                        <label class="mapping-label">Datum und Uhrzeit *</label>
+                        <select class="mapping-select" @bind="Mapping.DateIndex">
+                            <option value="-1">-- Nicht zugeordnet --</option>
+                            @for (int i = 0; i < Headers.Count; i++)
+                            {
+                                <option value="@i">@Headers[i]</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mapping-item">
+                        <label class="mapping-label">Gesamt Erzeugung *</label>
+                        <select class="mapping-select" @bind="Mapping.TotalGenerationIndex">
+                            <option value="-1">-- Nicht zugeordnet --</option>
+                            @for (int i = 0; i < Headers.Count; i++)
+                            {
+                                <option value="@i">@Headers[i]</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mapping-item">
+                        <label class="mapping-label">Gesamt Verbrauch *</label>
+                        <select class="mapping-select" @bind="Mapping.TotalConsumptionIndex">
+                            <option value="-1">-- Nicht zugeordnet --</option>
+                            @for (int i = 0; i < Headers.Count; i++)
+                            {
+                                <option value="@i">@Headers[i]</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mapping-item">
+                        <label class="mapping-label">Eigenverbrauch (optional)</label>
+                        <select class="mapping-select" @bind="Mapping.SelfConsumptionIndex">
+                            <option value="-1">-- Nicht zugeordnet --</option>
+                            @for (int i = 0; i < Headers.Count; i++)
+                            {
+                                <option value="@i">@Headers[i]</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mapping-item">
+                        <label class="mapping-label">Energie ins Netz eingespeist *</label>
+                        <select class="mapping-select" @bind="Mapping.EnergyFedToGridIndex">
+                            <option value="-1">-- Nicht zugeordnet --</option>
+                            @for (int i = 0; i < Headers.Count; i++)
+                            {
+                                <option value="@i">@Headers[i]</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mapping-item">
+                        <label class="mapping-label">Energie vom Netz bezogen *</label>
+                        <select class="mapping-select" @bind="Mapping.EnergyDrawnFromGridIndex">
+                            <option value="-1">-- Nicht zugeordnet --</option>
+                            @for (int i = 0; i < Headers.Count; i++)
+                            {
+                                <option value="@i">@Headers[i]</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(ValidationError))
+                {
+                    <div class="validation-error">@ValidationError</div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" @onclick="HandleClose">Abbrechen</button>
+                <button class="btn-primary" @onclick="HandleConfirm">Bestätigen</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool Show { get; set; }
+
+    [Parameter]
+    public List<string> Headers { get; set; } = new();
+
+    [Parameter]
+    public ColumnMapping Mapping { get; set; } = new();
+
+    [Parameter]
+    public EventCallback<ColumnMapping> OnConfirm { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private string ValidationError = string.Empty;
+
+    private void HandleClose()
+    {
+        Show = false;
+        OnClose.InvokeAsync();
+    }
+
+    private void HandleOverlayClick()
+    {
+        HandleClose();
+    }
+
+    private async Task HandleConfirm()
+    {
+        ValidationError = string.Empty;
+
+        if (!Mapping.IsValid())
+        {
+            ValidationError = "Bitte ordnen Sie alle mit * markierten Felder zu.";
+            return;
+        }
+
+        await OnConfirm.InvokeAsync(Mapping);
+        HandleClose();
+    }
+}
+
