@@ -1,0 +1,146 @@
+@using battery_calculator.Interfaces
+@using battery_calculator.Vendors
+@inject BatteryPriceService PriceService
+
+<div class="battery-tabs-container">
+    <div class="battery-tabs-header">
+        <div class="tabs">
+            @foreach (var battery in Batteries)
+            {
+                <button 
+                    class="tab-button @(SelectedBattery?.Name == battery.Name ? "active" : "")"
+                    @onclick="() => HandleBatterySelected(battery)">
+                    @battery.Name
+                    @if (battery.IsCustom)
+                    {
+                        <span class="remove-icon" @onclick:stopPropagation="true" @onclick="() => HandleRemoveBattery(battery)">×</span>
+                    }
+                </button>
+            }
+        </div>
+        <button class="add-battery-button" @onclick="HandleAddBattery">
+            + Eigene Batterie
+        </button>
+    </div>
+
+    @if (SelectedBattery != null)
+    {
+        <div class="battery-details">
+            <div class="detail-row">
+                <span class="detail-label">Kapazität:</span>
+                <span class="detail-value">@(SelectedBattery.CapacityWh / 1000.0) kWh</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Preis:</span>
+                <span class="detail-value">
+                    @if (isLoadingPrice)
+                    {
+                        <span class="loading">Lade Preis...</span>
+                    }
+                    else if (SelectedBattery.Price.HasValue)
+                    {
+                        <span>@SelectedBattery.Price.Value.ToString("F2") €</span>
+                    }
+                    else if (!string.IsNullOrEmpty(SelectedBattery.PriceUrl))
+                    {
+                        <a href="@SelectedBattery.PriceUrl" target="_blank" class="price-link">Preis anzeigen</a>
+                    }
+                    else
+                    {
+                        <span class="no-price">Nicht verfügbar</span>
+                    }
+                </span>
+            </div>
+        </div>
+    }
+</div>
+
+<CustomBatteryDialog 
+    Show="@showCustomBatteryDialog"
+    OnSave="@HandleCustomBatterySaved"
+    OnClose="@HandleCustomBatteryDialogClosed" />
+
+@code {
+    [Parameter]
+    public List<IBattery> Batteries { get; set; } = new();
+
+    [Parameter]
+    public IBattery? SelectedBattery { get; set; }
+
+    [Parameter]
+    public EventCallback<IBattery> OnBatterySelected { get; set; }
+
+    [Parameter]
+    public EventCallback<IBattery> OnBatteryRemoved { get; set; }
+
+    [Parameter]
+    public EventCallback<IBattery> OnBatteryAdded { get; set; }
+
+    private bool showCustomBatteryDialog = false;
+    private bool isLoadingPrice = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (SelectedBattery != null && !SelectedBattery.Price.HasValue && !string.IsNullOrEmpty(SelectedBattery.PriceUrl))
+        {
+            await LoadPriceAsync(SelectedBattery);
+        }
+    }
+
+    private async Task HandleBatterySelected(IBattery battery)
+    {
+        SelectedBattery = battery;
+        await OnBatterySelected.InvokeAsync(battery);
+
+        // Load price if needed
+        if (!battery.Price.HasValue && !string.IsNullOrEmpty(battery.PriceUrl))
+        {
+            await LoadPriceAsync(battery);
+        }
+    }
+
+    private async Task LoadPriceAsync(IBattery battery)
+    {
+        isLoadingPrice = true;
+        try
+        {
+            var price = await PriceService.FetchPriceAsync(battery);
+            if (price.HasValue)
+            {
+                battery.Price = price;
+            }
+        }
+        catch
+        {
+            // Price loading failed, ignore
+        }
+        finally
+        {
+            isLoadingPrice = false;
+        }
+    }
+
+    private void HandleAddBattery()
+    {
+        showCustomBatteryDialog = true;
+    }
+
+    private async Task HandleCustomBatterySaved(CustomBattery battery)
+    {
+        await OnBatteryAdded.InvokeAsync(battery);
+    }
+
+    private void HandleCustomBatteryDialogClosed()
+    {
+        showCustomBatteryDialog = false;
+    }
+
+    private async Task HandleRemoveBattery(IBattery battery)
+    {
+        if (battery.IsCustom)
+        {
+            await OnBatteryRemoved.InvokeAsync(battery);
+        }
+    }
+}
+

@@ -2,6 +2,7 @@
 @inject CsvParserService CsvParser
 @inject BatterySimulationService BatterySimulator
 @inject AmortizationCalculatorService AmortizationCalculator
+@inject VendorDetectionService VendorDetector
 
 <PageTitle>PV Battery Amortization Calculator</PageTitle>
 
@@ -43,28 +44,53 @@
             </div>
         </div>
 
-        <div class="section">
-            <h2>2. Batterie-Parameter</h2>
-            <div class="form-grid">
-                <div class="form-group">
-                    <label for="battery-capacity">Speicherkapazität (kWh)</label>
-                    <InputNumber @bind-Value="config.BatteryCapacity" id="battery-capacity" class="form-control" step="0.01" />
-                    <ValidationMessage For="@(() => config.BatteryCapacity)" />
-                </div>
+        @if (energyData != null && energyData.Count > 0)
+        {
+            <div class="section">
+                <h2>2. Wechselrichter und Batterie auswählen</h2>
+                
+                <VendorSelectionComponent 
+                    AvailableVendors="@availableVendors"
+                    SelectedVendor="@selectedVendor"
+                    OnVendorSelected="@HandleVendorSelected" />
 
-                <div class="form-group">
-                    <label for="charge-loss">Ladeverlust (%)</label>
-                    <InputNumber @bind-Value="config.ChargeLossPercent" id="charge-loss" class="form-control" step="0.1" />
-                    <ValidationMessage For="@(() => config.ChargeLossPercent)" />
-                </div>
+                @if (selectedVendor != null)
+                {
+                    <BatteryTabsComponent 
+                        Batteries="@selectedVendor.Batteries"
+                        SelectedBattery="@selectedBattery"
+                        OnBatterySelected="@HandleBatterySelected"
+                        OnBatteryRemoved="@HandleBatteryRemoved"
+                        OnBatteryAdded="@HandleBatteryAdded" />
+                }
+            </div>
+        }
+        else
+        {
+            <div class="section">
+                <h2>2. Batterie-Parameter</h2>
+                <p class="info-text">Bitte laden Sie zuerst eine CSV-Datei hoch, um automatische Vendor-Erkennung zu nutzen.</p>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="battery-capacity">Speicherkapazität (kWh)</label>
+                        <InputNumber @bind-Value="config.BatteryCapacity" id="battery-capacity" class="form-control" step="0.01" />
+                        <ValidationMessage For="@(() => config.BatteryCapacity)" />
+                    </div>
 
-                <div class="form-group">
-                    <label for="discharge-loss">Entladeverlust (%)</label>
-                    <InputNumber @bind-Value="config.DischargeLossPercent" id="discharge-loss" class="form-control" step="0.1" />
-                    <ValidationMessage For="@(() => config.DischargeLossPercent)" />
+                    <div class="form-group">
+                        <label for="charge-loss">Ladeverlust (%)</label>
+                        <InputNumber @bind-Value="config.ChargeLossPercent" id="charge-loss" class="form-control" step="0.1" />
+                        <ValidationMessage For="@(() => config.ChargeLossPercent)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="discharge-loss">Entladeverlust (%)</label>
+                        <InputNumber @bind-Value="config.DischargeLossPercent" id="discharge-loss" class="form-control" step="0.1" />
+                        <ValidationMessage For="@(() => config.DischargeLossPercent)" />
+                    </div>
                 </div>
             </div>
-        </div>
+        }
 
         <div class="section">
             <h2>3. Energiepreise</h2>
@@ -83,7 +109,11 @@
 
                 <div class="form-group">
                     <label for="battery-price">Batteriepreis (€)</label>
-                    <InputNumber @bind-Value="config.BatteryPrice" id="battery-price" class="form-control" step="0.01" />
+                    <InputNumber @bind-Value="config.BatteryPrice" id="battery-price" class="form-control" step="0.01" disabled="@(selectedBattery != null && selectedBattery.Price.HasValue)" />
+                    @if (selectedBattery != null && selectedBattery.Price.HasValue)
+                    {
+                        <small class="form-text">Wird von ausgewählter Batterie übernommen: @selectedBattery.Price.Value.ToString("F2") €</small>
+                    }
                     <ValidationMessage For="@(() => config.BatteryPrice)" />
                 </div>
             </div>
@@ -216,6 +246,15 @@
     private ColumnMapping columnMapping = new();
     private IBrowserFile? selectedFile;
 
+    private List<IVendor> availableVendors = new();
+    private IVendor? selectedVendor;
+    private IBattery? selectedBattery;
+
+    protected override void OnInitialized()
+    {
+        availableVendors = VendorDetector.GetAllVendors();
+    }
+
     private async Task HandleFileSelected(InputFileChangeEventArgs e)
     {
         uploadError = string.Empty;
@@ -256,6 +295,17 @@
             using var stream = selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
             energyData = await CsvParser.ParseCsvAsync(stream, mapping);
             uploadError = string.Empty;
+
+            // Detect vendor from CSV headers
+            var detectedVendor = VendorDetector.DetectVendor(csvHeaders, uploadedFileName);
+            selectedVendor = detectedVendor;
+            
+            // Select first battery if available
+            if (selectedVendor.Batteries.Count > 0)
+            {
+                selectedBattery = selectedVendor.Batteries[0];
+                UpdateConfigFromSelection();
+            }
         }
         catch (Exception ex)
         {
@@ -274,6 +324,67 @@
         }
     }
 
+    private void HandleVendorSelected(IVendor vendor)
+    {
+        selectedVendor = vendor;
+        if (vendor.Batteries.Count > 0)
+        {
+            selectedBattery = vendor.Batteries[0];
+        }
+        else
+        {
+            selectedBattery = null;
+        }
+        UpdateConfigFromSelection();
+    }
+
+    private void HandleBatterySelected(IBattery battery)
+    {
+        selectedBattery = battery;
+        UpdateConfigFromSelection();
+    }
+
+    private void HandleBatteryAdded(IBattery battery)
+    {
+        if (selectedVendor != null)
+        {
+            selectedVendor.Batteries.Add(battery);
+            selectedBattery = battery;
+            UpdateConfigFromSelection();
+        }
+    }
+
+    private void HandleBatteryRemoved(IBattery battery)
+    {
+        if (selectedVendor != null && battery.IsCustom)
+        {
+            selectedVendor.Batteries.Remove(battery);
+            if (selectedBattery == battery)
+            {
+                selectedBattery = selectedVendor.Batteries.FirstOrDefault();
+            }
+            UpdateConfigFromSelection();
+        }
+    }
+
+    private void UpdateConfigFromSelection()
+    {
+        if (selectedVendor != null)
+        {
+            config.ChargeLossPercent = selectedVendor.ChargeLossPercent;
+            config.DischargeLossPercent = selectedVendor.DischargeLossPercent;
+        }
+
+        if (selectedBattery != null)
+        {
+            config.BatteryCapacity = selectedBattery.CapacityWh / 1000.0; // Convert Wh to kWh
+            if (selectedBattery.Price.HasValue)
+            {
+                config.BatteryPrice = selectedBattery.Price.Value;
+            }
+        }
+    }
+
     private async Task HandleCalculate()
     {
         if (energyData == null || energyData.Count == 0)
@@ -288,12 +399,26 @@
         {
             await Task.Run(() =>
             {
+                // Use values from selection or manual input
+                var batteryCapacity = selectedBattery != null 
+                    ? selectedBattery.CapacityWh / 1000.0 
+                    : config.BatteryCapacity;
+                var chargeLoss = selectedVendor != null 
+                    ? selectedVendor.ChargeLossPercent 
+                    : config.ChargeLossPercent;
+                var dischargeLoss = selectedVendor != null 
+                    ? selectedVendor.DischargeLossPercent 
+                    : config.DischargeLossPercent;
+
                 // Simulate battery behavior
                 var simulationResults = BatterySimulator.Simulate(
                     energyData,
-                    config.BatteryCapacity,
-                    config.ChargeLossPercent,
-                    config.DischargeLossPercent);
+                    batteryCapacity,
+                    chargeLoss,
+                    dischargeLoss);
+
+                // Use battery price from selection or manual input
+                var batteryPrice = selectedBattery?.Price ?? config.BatteryPrice;
 
                 // Calculate amortization
                 result = AmortizationCalculator.Calculate(
@@ -301,7 +426,7 @@
                     energyData,
                     config.PricePerKwhPurchase,
                     config.PricePerKwhFeed,
-                    config.BatteryPrice);
+                    batteryPrice);
             });
         }
         catch (Exception ex)

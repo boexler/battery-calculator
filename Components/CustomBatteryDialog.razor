@@ -1,0 +1,115 @@
+@using battery_calculator.Vendors
+
+@if (Show)
+{
+    <div class="modal-overlay" @onclick="HandleOverlayClick">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h2>Eigene Batterie hinzufügen</h2>
+                <button class="modal-close" @onclick="HandleClose">×</button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="@batteryModel" OnValidSubmit="@HandleSave">
+                    <DataAnnotationsValidator />
+                    
+                    <div class="form-group">
+                        <label for="battery-name">Name *</label>
+                        <InputText @bind-Value="batteryModel.Name" id="battery-name" class="form-control" />
+                        <ValidationMessage For="@(() => batteryModel.Name)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="battery-capacity">Kapazität (kWh) *</label>
+                        <InputNumber @bind-Value="batteryModel.CapacityKwh" id="battery-capacity" class="form-control" step="0.01" />
+                        <ValidationMessage For="@(() => batteryModel.CapacityKwh)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="battery-price">Preis (€)</label>
+                        <InputNumber @bind-Value="batteryModel.Price" id="battery-price" class="form-control" step="0.01" />
+                        <ValidationMessage For="@(() => batteryModel.Price)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="battery-price-url">Preis-URL (optional)</label>
+                        <InputText @bind-Value="batteryModel.PriceUrl" id="battery-price-url" class="form-control" placeholder="https://..." />
+                        <ValidationMessage For="@(() => batteryModel.PriceUrl)" />
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(ValidationError))
+                    {
+                        <div class="validation-error">@ValidationError</div>
+                    }
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" @onclick="HandleClose">Abbrechen</button>
+                        <button type="submit" class="btn-primary">Speichern</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool Show { get; set; }
+
+    [Parameter]
+    public EventCallback<CustomBattery> OnSave { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private CustomBatteryModel batteryModel = new();
+    private string ValidationError = string.Empty;
+
+    private void HandleClose()
+    {
+        Show = false;
+        batteryModel = new CustomBatteryModel();
+        ValidationError = string.Empty;
+        OnClose.InvokeAsync();
+    }
+
+    private void HandleOverlayClick()
+    {
+        HandleClose();
+    }
+
+    private async Task HandleSave()
+    {
+        ValidationError = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(batteryModel.Name))
+        {
+            ValidationError = "Bitte geben Sie einen Namen ein.";
+            return;
+        }
+
+        if (batteryModel.CapacityKwh <= 0)
+        {
+            ValidationError = "Die Kapazität muss größer als 0 sein.";
+            return;
+        }
+
+        var battery = new CustomBattery(
+            batteryModel.Name,
+            batteryModel.CapacityKwh,
+            batteryModel.Price,
+            batteryModel.PriceUrl
+        );
+
+        await OnSave.InvokeAsync(battery);
+        HandleClose();
+    }
+
+    private class CustomBatteryModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public double CapacityKwh { get; set; }
+        public double? Price { get; set; }
+        public string? PriceUrl { get; set; }
+    }
+}
+

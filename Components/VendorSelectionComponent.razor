@@ -1,0 +1,33 @@
+@using battery_calculator.Interfaces
+
+<div class="vendor-selection">
+    <h3>Wechselrichter-Hersteller</h3>
+    <div class="vendor-buttons">
+        @foreach (var vendor in AvailableVendors)
+        {
+            <button 
+                class="vendor-button @(SelectedVendor?.Name == vendor.Name ? "active" : "")"
+                @onclick="() => HandleVendorSelected(vendor)">
+                @vendor.Name
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public List<IVendor> AvailableVendors { get; set; } = new();
+
+    [Parameter]
+    public IVendor? SelectedVendor { get; set; }
+
+    [Parameter]
+    public EventCallback<IVendor> OnVendorSelected { get; set; }
+
+    private async Task HandleVendorSelected(IVendor vendor)
+    {
+        SelectedVendor = vendor;
+        await OnVendorSelected.InvokeAsync(vendor);
+    }
+}
+

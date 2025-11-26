@@ -14,6 +14,8 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 builder.Services.AddScoped<CsvParserService>();
 builder.Services.AddScoped<BatterySimulationService>();
 builder.Services.AddScoped<AmortizationCalculatorService>();
+builder.Services.AddScoped<VendorDetectionService>();
+builder.Services.AddScoped<BatteryPriceService>();
 
 await builder.Build().RunAsync();
 
