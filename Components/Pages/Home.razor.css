@@ -41,8 +41,37 @@
     gap: 1rem;
 }
 
-.file-input {
-    display: none;
+/* Hide the InputFile component completely */
+.file-input-hidden {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    width: 0 !important;
+    height: 0 !important;
+    opacity: 0 !important;
+    overflow: hidden !important;
+    clip-path: inset(50%) !important;
+    pointer-events: none !important;
+}
+
+/* Hide any file input elements */
+input[type="file"].file-input-hidden,
+input[type="file"]#file-upload {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    width: 0 !important;
+    height: 0 !important;
+    opacity: 0 !important;
+    overflow: hidden !important;
+    clip-path: inset(50%) !important;
+    pointer-events: none !important;
+}
+
+/* Hide file selector button if it exists */
+.file-input-hidden::file-selector-button,
+input[type="file"]::file-selector-button {
+    display: none !important;
 }
 
 .file-label {
