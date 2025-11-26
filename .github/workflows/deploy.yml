@@ -36,6 +36,9 @@ jobs:
       - name: Publish
         run: dotnet publish --no-build --configuration Release --output ./publish
 
+      - name: Update base href for GitHub Pages
+        run: sed -i 's|<base href="/" />|<base href="/battery-calculator/" />|g' ./publish/wwwroot/index.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
