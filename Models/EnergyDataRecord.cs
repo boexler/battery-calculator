@@ -57,3 +57,7 @@ public class EnergyDataRecord
     public double EnergyDrawnFromGridKwh => EnergyDrawnFromGrid / 1000.0;
 }
 
+
+
+
+

@@ -31,3 +31,7 @@ public interface IBattery
     bool IsCustom { get; }
 }
 
+
+
+
+

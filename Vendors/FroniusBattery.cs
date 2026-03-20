@@ -20,3 +20,7 @@ public class FroniusBattery : Interfaces.IBattery
     }
 }
 
+
+
+
+

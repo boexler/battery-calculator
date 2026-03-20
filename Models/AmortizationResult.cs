@@ -56,3 +56,7 @@ public class AmortizationResult
     public bool IsAmortizationPossible => AnnualSavings > 0;
 }
 
+
+
+
+

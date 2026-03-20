@@ -61,3 +61,7 @@ public class BatterySimulationResult
     public double EnergyUsedForCharging => OriginalGridFeed - GridFeedAfterBattery;
 }
 
+
+
+
+
