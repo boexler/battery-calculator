@@ -1,4 +1,5 @@
 @page "/"
+@using System.Globalization
 @inject CsvParserService CsvParser
 @inject BatterySimulationService BatterySimulator
 @inject AmortizationCalculatorService AmortizationCalculator
@@ -187,38 +188,68 @@
             {
                 <div class="daily-results">
                     <h3>Tägliche Ergebnisse</h3>
-                    <div class="table-container">
-                        <table class="results-table">
-                            <thead>
-                                <tr>
-                                    <th>Datum</th>
-                                    <th>Akku Start (kWh)</th>
-                                    <th>Entladen (kWh)</th>
-                                    <th>Geladen (kWh)</th>
-                                    <th>Akku Ende (kWh)</th>
-                                    <th>Netzbezug ohne Akku (kWh)</th>
-                                    <th>Netzbezug mit Akku (kWh)</th>
-                                    <th>Einspeisung ohne Akku (kWh)</th>
-                                    <th>Einspeisung mit Akku (kWh)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var day in result.DailyResults)
-                                {
-                                    <tr>
-                                        <td>@day.Date.ToString("dd.MM.yyyy")</td>
-                                        <td>@day.BatteryChargeStart.ToString("F2")</td>
-                                        <td>@day.EnergyDischarged.ToString("F2")</td>
-                                        <td>@day.EnergyCharged.ToString("F2")</td>
-                                        <td>@day.BatteryChargeEnd.ToString("F2")</td>
-                                        <td>@day.OriginalGridDraw.ToString("F2")</td>
-                                        <td>@day.GridDrawAfterBattery.ToString("F2")</td>
-                                        <td>@day.OriginalGridFeed.ToString("F2")</td>
-                                        <td>@day.GridFeedAfterBattery.ToString("F2")</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+                    <div class="daily-results-monthly">
+                        <div class="month-expander-grid month-expander-grid-head" role="row">
+                            <span class="month-expander-cell month-expander-head-first">Datum</span>
+                            <span class="month-expander-cell month-expander-head-numeric">Akku Start (kWh)</span>
+                            <span class="month-expander-cell month-expander-head-numeric">Entladen (kWh)</span>
+                            <span class="month-expander-cell month-expander-head-numeric">Geladen (kWh)</span>
+                            <span class="month-expander-cell month-expander-head-numeric">Akku Ende (kWh)</span>
+                            <span class="month-expander-cell month-expander-head-numeric">Netzbezug ohne Akku (kWh)</span>
+                            <span class="month-expander-cell month-expander-head-numeric">Netzbezug mit Akku (kWh)</span>
+                            <span class="month-expander-cell month-expander-head-numeric">Einspeisung ohne Akku (kWh)</span>
+                            <span class="month-expander-cell month-expander-head-numeric">Einspeisung mit Akku (kWh)</span>
+                        </div>
+                        @foreach (var monthGroup in GroupDailyResultsByMonth(result.DailyResults))
+                        {
+                            var sums = SumDailyColumns(monthGroup.Days);
+                            <details class="month-expander">
+                                <summary class="month-expander-grid month-expander-summary">
+                                    <span class="month-expander-cell month-expander-month">@monthGroup.Month.ToString("MMMM yyyy", GermanCulture)</span>
+                                    <span class="month-expander-cell">@($"{sums.BatteryChargeStartSum:F2} kWh")</span>
+                                    <span class="month-expander-cell">@($"{sums.EnergyDischargedSum:F2} kWh")</span>
+                                    <span class="month-expander-cell">@($"{sums.EnergyChargedSum:F2} kWh")</span>
+                                    <span class="month-expander-cell">@($"{sums.BatteryChargeEndSum:F2} kWh")</span>
+                                    <span class="month-expander-cell">@($"{sums.OriginalGridDrawSum:F2} kWh")</span>
+                                    <span class="month-expander-cell">@($"{sums.GridDrawAfterBatterySum:F2} kWh")</span>
+                                    <span class="month-expander-cell">@($"{sums.OriginalGridFeedSum:F2} kWh")</span>
+                                    <span class="month-expander-cell">@($"{sums.GridFeedAfterBatterySum:F2} kWh")</span>
+                                </summary>
+                                <div class="table-container month-expander-table-wrap">
+                                    <table class="results-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Datum</th>
+                                                <th>Akku Start (kWh)</th>
+                                                <th>Entladen (kWh)</th>
+                                                <th>Geladen (kWh)</th>
+                                                <th>Akku Ende (kWh)</th>
+                                                <th>Netzbezug ohne Akku (kWh)</th>
+                                                <th>Netzbezug mit Akku (kWh)</th>
+                                                <th>Einspeisung ohne Akku (kWh)</th>
+                                                <th>Einspeisung mit Akku (kWh)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var day in monthGroup.Days)
+                                            {
+                                                <tr>
+                                                    <td>@day.Date.ToString("dd.MM.yyyy")</td>
+                                                    <td>@day.BatteryChargeStart.ToString("F2")</td>
+                                                    <td>@day.EnergyDischarged.ToString("F2")</td>
+                                                    <td>@day.EnergyCharged.ToString("F2")</td>
+                                                    <td>@day.BatteryChargeEnd.ToString("F2")</td>
+                                                    <td>@day.OriginalGridDraw.ToString("F2")</td>
+                                                    <td>@day.GridDrawAfterBattery.ToString("F2")</td>
+                                                    <td>@day.OriginalGridFeed.ToString("F2")</td>
+                                                    <td>@day.GridFeedAfterBattery.ToString("F2")</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </details>
+                        }
                     </div>
                 </div>
             }
@@ -234,6 +265,8 @@
 </div>
 
 @code {
+    private static readonly CultureInfo GermanCulture = CultureInfo.GetCultureInfo("de-DE");
+
     private ConfigurationModel config = new();
     private List<EnergyDataRecord>? energyData;
     private AmortizationResult? result;
@@ -438,6 +471,46 @@
             isCalculating = false;
         }
     }
+
+    /// <summary>
+    /// Groups daily simulation rows by calendar month (first day of month as key), ordered chronologically.
+    /// </summary>
+    private static IReadOnlyList<MonthlyDailyGroup> GroupDailyResultsByMonth(IEnumerable<BatterySimulationResult> dailyResults)
+    {
+        return dailyResults
+            .GroupBy(d => new DateTime(d.Date.Year, d.Date.Month, 1))
+            .OrderBy(g => g.Key)
+            .Select(g => new MonthlyDailyGroup(g.Key, g.OrderBy(x => x.Date).ToList()))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Sums the eight numeric result columns over all days in a month (for expander summary row).
+    /// </summary>
+    private static DailyColumnSums SumDailyColumns(IReadOnlyList<BatterySimulationResult> days)
+    {
+        return new DailyColumnSums(
+            BatteryChargeStartSum: days.Sum(d => d.BatteryChargeStart),
+            EnergyDischargedSum: days.Sum(d => d.EnergyDischarged),
+            EnergyChargedSum: days.Sum(d => d.EnergyCharged),
+            BatteryChargeEndSum: days.Sum(d => d.BatteryChargeEnd),
+            OriginalGridDrawSum: days.Sum(d => d.OriginalGridDraw),
+            GridDrawAfterBatterySum: days.Sum(d => d.GridDrawAfterBattery),
+            OriginalGridFeedSum: days.Sum(d => d.OriginalGridFeed),
+            GridFeedAfterBatterySum: days.Sum(d => d.GridFeedAfterBattery));
+    }
+
+    private sealed record MonthlyDailyGroup(DateTime Month, IReadOnlyList<BatterySimulationResult> Days);
+
+    private sealed record DailyColumnSums(
+        double BatteryChargeStartSum,
+        double EnergyDischargedSum,
+        double EnergyChargedSum,
+        double BatteryChargeEndSum,
+        double OriginalGridDrawSum,
+        double GridDrawAfterBatterySum,
+        double OriginalGridFeedSum,
+        double GridFeedAfterBatterySum);
 
     public class ConfigurationModel
     {
